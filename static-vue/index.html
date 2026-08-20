@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>Agentenbasierte Depoteröffnung — Vue-UI (LangGraph)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+<style>
+  :root {
+    --navy: #12294A; --navy-light: #1E3A63; --ice: #F4F7FB; --gold: #B8923E;
+    --gold-pale: #F2E9D3; --teal: #2E6B5E; --text-muted: #5B6B82;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Calibri, Arial, sans-serif; background: var(--ice); color: var(--navy); }
+  header { background: var(--navy); color: white; padding: 1.4rem 2rem; }
+  header h1 { margin: 0; font-size: 1.4rem; }
+  header p { margin: 0.3rem 0 0; color: #AFC2DE; font-size: 0.9rem; }
+  main { max-width: 920px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+  .request-row { display: flex; gap: 0.6rem; margin-bottom: 1rem; }
+  input[type=text] {
+    flex: 1; padding: 0.6rem 0.8rem; border: 1px solid #C9D5E6; border-radius: 6px; font-size: 0.95rem;
+  }
+  button {
+    font-family: inherit; font-size: 0.95rem; border: none; border-radius: 6px;
+    padding: 0.6rem 1.2rem; cursor: pointer; font-weight: 600;
+  }
+  #startBtn { background: var(--navy); color: white; }
+  #startBtn:disabled { background: #9AA9BE; cursor: not-allowed; }
+  .status { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem; }
+  .log { background: white; border-radius: 10px; padding: 1rem 1.2rem; min-height: 300px; box-shadow: 0 1px 4px rgba(18,41,74,0.08); }
+  .entry { display: flex; gap: 0.7rem; padding: 0.45rem 0; border-bottom: 1px solid #EEF2F8; align-items: baseline; }
+  .entry:last-child { border-bottom: none; }
+  .tag { font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px; white-space: nowrap; color: white; }
+  .tag.research { background: var(--navy); } .tag.depot { background: var(--teal); }
+  .tag.anleger { background: #6B5AA8; } .tag.hitl { background: var(--gold); color: #3a2c0d; }
+  .tag.kunde { background: #3a4a63; }
+  .step-text { font-size: 0.95rem; }
+  .detail { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; }
+  .hitl-box { margin-top: 1rem; background: var(--gold-pale); border: 1px solid var(--gold); border-radius: 10px; padding: 1rem 1.2rem; }
+  .hitl-box h3 { margin: 0 0 0.4rem; font-size: 1rem; color: #6B4F1A; }
+  .hitl-box .actions { margin-top: 0.8rem; display: flex; gap: 0.8rem; }
+  #approveBtn { background: var(--teal); color: white; } #rejectBtn { background: #A33; color: white; }
+  .summary-box { margin-top: 1rem; background: #E4F0EC; border: 1px solid var(--teal); border-radius: 10px; padding: 1rem 1.2rem; font-size: 0.95rem; }
+  .badge { display:inline-block; font-size:0.72rem; background:var(--navy-light); color:white; padding:0.15rem 0.5rem; border-radius:999px; margin-left:0.5rem; }
+  fieldset { border: 1px solid #D6DEEA; border-radius: 10px; margin: 0 0 1rem; padding: 0.9rem 1.1rem 1.1rem; }
+  legend { font-weight: 700; font-size: 0.85rem; color: var(--navy); padding: 0 0.4rem; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem 1rem; }
+  .field { display: flex; flex-direction: column; gap: 0.25rem; }
+  .field label { font-size: 0.78rem; color: var(--text-muted); }
+  .field input, .field select {
+    width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #C9D5E6; border-radius: 6px; font-size: 0.9rem; font-family: inherit;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Agentenbasierte Depoteröffnung <span class="badge">Vue 3 · LangGraph · echtes MCP</span></h1>
+    <p>Kundenagent formuliert die Anfrage frei — Praeferenz-Extraktion, Produktvergleich, Onboarding und HITL-Gate laufen als LangGraph-State-Machine über echte MCP-Server.</p>
+  </header>
+  <main>
+    <div class="request-row">
+      <input type="text" v-model="rawRequest" placeholder="z. B. Ich möchte nachhaltig 200 Euro im Monat sparen." />
+      <button id="startBtn" :disabled="running" @click="start">Szenario starten</button>
+    </div>
+
+    <fieldset>
+      <legend>Persönliche Daten &amp; Kontakt (Pflichtfelder lt. GwG/KYC)</legend>
+      <div class="grid">
+        <div class="field"><label>Vorname</label><input v-model="customerData.vorname" /></div>
+        <div class="field"><label>Nachname</label><input v-model="customerData.nachname" /></div>
+        <div class="field"><label>Geburtsdatum</label><input type="date" v-model="customerData.geburtsdatum" /></div>
+        <div class="field"><label>Geburtsort</label><input v-model="customerData.geburtsort" /></div>
+        <div class="field"><label>Staatsangehörigkeit</label><input v-model="customerData.staatsangehoerigkeit" /></div>
+        <div class="field"><label>Meldeadresse</label><input v-model="customerData.adresse" /></div>
+        <div class="field"><label>E-Mail</label><input type="email" v-model="customerData.email" /></div>
+        <div class="field"><label>Telefonnummer</label><input v-model="customerData.telefon" /></div>
+        <div class="field"><label>Steuer-ID</label><input v-model="customerData.steuer_id" /></div>
+        <div class="field"><label>Steuerlich ansässig in</label><input v-model="customerData.steuerlich_ansaessig_in" /></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Ident-Kanal &amp; Geeignetheit</legend>
+      <div class="grid">
+        <div class="field">
+          <label>Ident-Kanal</label>
+          <select v-model="identChannel">
+            <option value="video_ident">Video-Ident (IDnow/WebID, ~15 Min., Termin nötig)</option>
+            <option value="eid">eID / AusweisApp2 (~5 Min., kein Termin)</option>
+            <option value="postident">PostIdent (~3 Tage, kein Termin)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Wertpapierkenntnisse</label>
+          <select v-model="productKnowledge">
+            <option value="gering">gering</option>
+            <option value="mittel">mittel</option>
+            <option value="hoch">hoch</option>
+          </select>
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="status">{{ status }}</div>
+    <div class="log">
+      <div class="entry" v-for="(e, i) in events" :key="i">
+        <span class="tag" :class="tagClass(e.agent)">{{ tagLabel(e.agent) }}</span>
+        <div>
+          <div class="step-text">{{ e.step }}</div>
+          <div class="detail" v-if="e.detail && Object.keys(e.detail).length">{{ JSON.stringify(e.detail) }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="hitl-box" v-if="hitl">
+      <h3>Menschliche Freigabe erforderlich</h3>
+      <div>Session {{ hitl.session_id }} · Risiko-Score: {{ hitl.suitability.risk_score }} (Wert {{ hitl.suitability.score_value }})</div>
+      <div class="actions">
+        <button id="approveBtn" @click="respond(true)">Freigeben</button>
+        <button id="rejectBtn" @click="respond(false)">Ablehnen</button>
+      </div>
+    </div>
+    <div class="summary-box" v-if="summary !== null">{{ summary || 'Vorgang abgebrochen.' }}</div>
+  </main>
+</div>
+
+<script>
+const { createApp, ref } = Vue;
+
+createApp({
+  setup() {
+    const rawRequest = ref("Ich möchte nachhaltig 200 Euro im Monat sparen.");
+    const customerData = ref({
+      vorname: "Max", nachname: "Mustermann", geburtsdatum: "1990-05-14",
+      geburtsort: "Berlin", staatsangehoerigkeit: "deutsch",
+      adresse: "Musterstraße 1, 10115 Berlin", email: "max.mustermann@example.com",
+      telefon: "+49 151 00000000", steuer_id: "12345678901", steuerlich_ansaessig_in: "DE",
+    });
+    const identChannel = ref("video_ident");
+    const productKnowledge = ref("gering");
+    const events = ref([]);
+    const hitl = ref(null);
+    const summary = ref(null);
+    const running = ref(false);
+    const status = ref("Bereit.");
+    let ws = null;
+
+    const tagMap = {
+      "Research-Agent": ["research", "Research"],
+      "Depot-Agent": ["depot", "Depot"],
+      "Anleger-Agent": ["anleger", "Anleger"],
+      "Mensch (HITL)": ["hitl", "Mensch"],
+      "Kundenagent": ["kunde", "Kunde"],
+    };
+    const tagClass = (agent) => (tagMap[agent] || ["kunde", agent])[0];
+    const tagLabel = (agent) => (tagMap[agent] || ["kunde", agent])[1];
+
+    function start() {
+      events.value = [];
+      hitl.value = null;
+      summary.value = null;
+      running.value = true;
+      status.value = "Läuft...";
+
+      // Dynamisches WS/WSS Protokoll (HTTPS-sicher)
+      const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+      ws = new WebSocket(`${protocol}//${location.host}/ws-langgraph`);
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          raw_request: rawRequest.value,
+          customer_data: customerData.value,
+          ident_channel: identChannel.value,
+          risk_profile: { product_knowledge: productKnowledge.value },
+        }));
+      };
+
+      ws.onmessage = (msg) => {
+        try {
+          const data = JSON.parse(msg.data);
+          if (data.type === "event") {
+            events.value.push(data);
+          } else if (data.type === "hitl_request") {
+            hitl.value = data;
+          } else if (data.type === "done") {
+            status.value = "Abgeschlossen.";
+            running.value = false;
+            summary.value = data.summary;
+          } else if (data.type === "error") {
+            status.value = "Fehler: " + data.message;
+            running.value = false;
+          }
+        } catch (e) {
+          console.error("Fehler beim Verarbeiten der WS-Nachricht:", e);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error("WebSocket Fehler:", err);
+        status.value = "Verbindungsfehler zum Server.";
+        running.value = false;
+      };
+
+      ws.onclose = () => {
+        if (running.value) {
+          status.value = "Verbindung getrennt.";
+          running.value = false;
+        }
+      };
+    }
+
+    function respond(approved) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        hitl.value = null;
+        ws.send(JSON.stringify({ approved }));
+      } else {
+        status.value = "Fehler: WebSocket-Verbindung ist nicht mehr aktiv.";
+      }
+    }
+
+    return { rawRequest, customerData, identChannel, productKnowledge, events, hitl, summary, running, status, start, respond, tagClass, tagLabel };
+  }
+}).mount("#app");
+</script>
+</body>
+</html>

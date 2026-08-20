@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>Agentenbasierte Depoteröffnung — Demo</title>
+<style>
+  :root {
+    --navy: #12294A;
+    --navy-light: #1E3A63;
+    --ice: #F4F7FB;
+    --gold: #B8923E;
+    --gold-pale: #F2E9D3;
+    --teal: #2E6B5E;
+    --text-muted: #5B6B82;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: Calibri, Arial, sans-serif; background: var(--ice); color: var(--navy);
+  }
+  header {
+    background: var(--navy); color: white; padding: 1.4rem 2rem;
+  }
+  header h1 { margin: 0; font-size: 1.4rem; }
+  header p { margin: 0.3rem 0 0; color: #AFC2DE; font-size: 0.95rem; }
+  main { max-width: 900px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+
+  fieldset { border: 1px solid #D6DEEA; border-radius: 10px; margin: 0 0 1rem; padding: 0.9rem 1.1rem 1.1rem; }
+  legend { font-weight: 700; font-size: 0.85rem; color: var(--navy); padding: 0 0.4rem; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem 1rem; }
+  .field { display: flex; flex-direction: column; gap: 0.25rem; }
+  .field label { font-size: 0.78rem; color: var(--text-muted); }
+  .field input, .field select {
+    padding: 0.45rem 0.6rem; border: 1px solid #C9D5E6; border-radius: 6px; font-size: 0.9rem; font-family: inherit;
+  }
+  .field.invalid input { border-color: #A33; background: #FDECEC; }
+  .toggle-form { background: none; color: var(--navy); text-decoration: underline; padding: 0.3rem 0; margin-bottom: 0.6rem; font-weight: 500; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+  
+  .request-row { display: flex; gap: 0.6rem; align-items: center; margin-bottom: 1rem; }
+  input[type=text] {
+    flex: 1; padding: 0.6rem 0.8rem; border: 1px solid #C9D5E6; border-radius: 6px; font-size: 0.95rem;
+  }
+
+  button {
+    font-family: inherit; font-size: 0.95rem; border: none; border-radius: 6px;
+    padding: 0.6rem 1.2rem; cursor: pointer; font-weight: 600;
+  }
+  #startBtn { background: var(--navy); color: white; }
+  #startBtn:disabled { background: #9AA9BE; cursor: not-allowed; }
+  .status { font-size: 0.9rem; color: var(--text-muted); }
+  #log {
+    background: white; border-radius: 10px; padding: 1rem 1.2rem; min-height: 300px;
+    box-shadow: 0 1px 4px rgba(18,41,74,0.08);
+  }
+  .entry { display: flex; gap: 0.7rem; padding: 0.45rem 0; border-bottom: 1px solid #EEF2F8; align-items: baseline; }
+  .entry:last-child { border-bottom: none; }
+  .tag {
+    font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px;
+    white-space: nowrap; color: white;
+  }
+  .tag.research { background: var(--navy); }
+  .tag.depot { background: var(--teal); }
+  .tag.anleger { background: #6B5AA8; }
+  .tag.hitl { background: var(--gold); color: #3a2c0d; }
+  .tag.kunde { background: #3a4a63; }
+  .step-text { font-size: 0.95rem; }
+  .detail { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem; }
+  #hitlBox {
+    display: none; margin-top: 1rem; background: var(--gold-pale); border: 1px solid var(--gold);
+    border-radius: 10px; padding: 1rem 1.2rem;
+  }
+  #hitlBox h3 { margin: 0 0 0.4rem; font-size: 1rem; color: #6B4F1A; }
+  #hitlBox .actions { margin-top: 0.8rem; display: flex; gap: 0.8rem; }
+  #approveBtn { background: var(--teal); color: white; }
+  #rejectBtn { background: #A33; color: white; }
+  #summaryBox {
+    display: none; margin-top: 1rem; background: #E4F0EC; border: 1px solid var(--teal);
+    border-radius: 10px; padding: 1rem 1.2rem; font-size: 0.95rem;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agentenbasierte Depoteröffnung</h1>
+  <p>Live-Demo — echte MCP-Server (Discovery / Onboarding / Trading) über das MCP-Protokoll angesprochen</p>
+</header>
+<main>
+
+  <div class="request-row">
+    <input type="text" id="rawRequestInput" value="Ich möchte nachhaltig 200 Euro im Monat sparen." placeholder="z. B. Ich möchte nachhaltig 200 Euro im Monat sparen." />
+    <button id="startBtn" onclick="startScenario()">Szenario starten</button>
+    <span class="status" id="status">Bereit.</span>
+  </div>
+
+  <fieldset>
+    <legend>Persönliche Daten &amp; Kontakt (Pflichtfelder lt. GwG/KYC)</legend>
+    <div class="grid">
+      <div class="field"><label for="f_vorname">Vorname</label><input id="f_vorname" value="Max" /></div>
+      <div class="field"><label for="f_nachname">Nachname</label><input id="f_nachname" value="Mustermann" /></div>
+      <div class="field"><label for="f_geburtsdatum">Geburtsdatum</label><input id="f_geburtsdatum" type="date" value="1990-05-14" /></div>
+      <div class="field"><label for="f_geburtsort">Geburtsort</label><input id="f_geburtsort" value="Berlin" /></div>
+      <div class="field"><label for="f_staatsangehoerigkeit">Staatsangehörigkeit</label><input id="f_staatsangehoerigkeit" value="deutsch" /></div>
+      <div class="field"><label for="f_adresse">Meldeadresse</label><input id="f_adresse" value="Musterstraße 1, 10115 Berlin" /></div>
+      <div class="field"><label for="f_email">E-Mail</label><input id="f_email" type="email" value="max.mustermann@example.com" /></div>
+      <div class="field"><label for="f_telefon">Telefonnummer</label><input id="f_telefon" value="+49 151 00000000" /></div>
+      <div class="field"><label for="f_steuer_id">Steuer-ID</label><input id="f_steuer_id" value="12345678901" /></div>
+      <div class="field"><label for="f_steuerlich_ansaessig_in">Steuerlich ansässig in</label><input id="f_steuerlich_ansaessig_in" value="DE" /></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Ident-Kanal &amp; Geeignetheit</legend>
+    <div class="grid">
+      <div class="field">
+        <label for="f_ident_channel">Ident-Kanal</label>
+        <select id="f_ident_channel">
+          <option value="video_ident">Video-Ident (IDnow/WebID, ~15 Min., Termin nötig)</option>
+          <option value="eid">eID / AusweisApp2 (~5 Min., kein Termin)</option>
+          <option value="postident">PostIdent (~3 Tage, kein Termin)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f_product_knowledge">Wertpapierkenntnisse</label>
+        <select id="f_product_knowledge">
+          <option value="gering">gering</option>
+          <option value="mittel">mittel</option>
+          <option value="hoch">hoch</option>
+        </select>
+      </div>
+    </div>
+  </fieldset>
+
+  <div id="log"></div>
+  <div id="hitlBox">
+    <h3>Menschliche Freigabe erforderlich</h3>
+    <div id="hitlDetail"></div>
+    <div class="actions">
+      <button id="approveBtn" onclick="respondHitl(true)">Freigeben</button>
+      <button id="rejectBtn" onclick="respondHitl(false)">Ablehnen</button>
+    </div>
+  </div>
+  <div id="summaryBox"></div>
+</main>
+
+<script>
+let ws = null;
+
+const agentTag = (agent) => {
+  const map = {
+    "Research-Agent": ["research", "Research"],
+    "Depot-Agent": ["depot", "Depot"],
+    "Anleger-Agent": ["anleger", "Anleger"],
+    "Mensch (HITL)": ["hitl", "Mensch"],
+    "Kundenagent": ["kunde", "Kunde"],
+  };
+  return map[agent] || ["kunde", agent];
+};
+
+function addLogEntry(event) {
+  const log = document.getElementById("log");
+  if (!log) return;
+  const [cls, label] = agentTag(event.agent);
+  const entry = document.createElement("div");
+  entry.className = "entry";
+  const detailStr = event.detail && Object.keys(event.detail).length
+    ? `<div class="detail">${escapeHtml(JSON.stringify(event.detail))}</div>` : "";
+  entry.innerHTML = `<span class="tag ${cls}">${label}</span>
+    <div><div class="step-text">${escapeHtml(event.step)}</div>${detailStr}</div>`;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function setStatusText(text) {
+  const statusEl = document.getElementById("status");
+  if (statusEl) statusEl.textContent = text;
+}
+
+function startScenario() {
+  document.getElementById("log").innerHTML = "";
+  document.getElementById("summaryBox").style.display = "none";
+  document.getElementById("hitlBox").style.display = "none";
+  document.getElementById("startBtn").disabled = true;
+  setStatusText("Läuft...");
+
+  const rawRequestValue = document.getElementById("rawRequestInput").value;
+  const customerData = {
+    vorname: document.getElementById("f_vorname").value,
+    nachname: document.getElementById("f_nachname").value,
+    geburtsdatum: document.getElementById("f_geburtsdatum").value,
+    geburtsort: document.getElementById("f_geburtsort").value,
+    staatsangehoerigkeit: document.getElementById("f_staatsangehoerigkeit").value,
+    adresse: document.getElementById("f_adresse").value,
+    email: document.getElementById("f_email").value,
+    telefon: document.getElementById("f_telefon").value,
+    steuer_id: document.getElementById("f_steuer_id").value,
+    steuerlich_ansaessig_in: document.getElementById("f_steuerlich_ansaessig_in").value,
+  };
+  const identChannel = document.getElementById("f_ident_channel").value;
+  const productKnowledge = document.getElementById("f_product_knowledge").value;
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  
+  ws = new WebSocket(`${protocol}//${window.location.host}/ws-langgraph`);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      raw_request: rawRequestValue,
+      customer_data: customerData,
+      ident_channel: identChannel,
+      risk_profile: { product_knowledge: productKnowledge },
+    }));
+  };
+
+  ws.onmessage = (msg) => {
+    const data = JSON.parse(msg.data);
+    if (data.type === "event") {
+      addLogEntry(data);
+    } else if (data.type === "hitl_request") {
+      document.getElementById("hitlDetail").textContent =
+        `Session ${data.session_id} · Risiko-Score: ${data.suitability.risk_score} (Wert ${data.suitability.score_value})`;
+      document.getElementById("hitlBox").style.display = "block";
+    } else if (data.type === "done") {
+      setStatusText("Abgeschlossen.");
+      document.getElementById("startBtn").disabled = false;
+      const box = document.getElementById("summaryBox");
+      box.style.display = "block";
+      box.textContent = data.summary || "Vorgang abgebrochen.";
+    } else if (data.type === "error") {
+      setStatusText("Fehler: " + data.message);
+      document.getElementById("startBtn").disabled = false;
+    }
+  };
+  
+  ws.onerror = () => {
+    setStatusText("Verbindungsfehler.");
+    document.getElementById("startBtn").disabled = false;
+  };
+
+  ws.onclose = () => {
+    document.getElementById("startBtn").disabled = false;
+  };
+}
+
+function respondHitl(approved) {
+  document.getElementById("hitlBox").style.display = "none";
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ approved }));
+  }
+}
+</script>
+</body>
+</html>

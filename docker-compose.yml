@@ -1,0 +1,39 @@
+services:
+  discovery:
+    build: .
+    command: fastmcp run mcp_servers/discovery_server.py --transport sse --port 8001 --host 0.0.0.0
+    environment:
+      - FASTMCP_HTTP_HOST_ORIGIN_PROTECTION=false
+    ports:
+      - "8001:8001"
+
+  onboarding:
+    build: .
+    command: fastmcp run mcp_servers/onboarding_server.py --transport sse --port 8002 --host 0.0.0.0
+    environment:
+      - FASTMCP_HTTP_HOST_ORIGIN_PROTECTION=false
+    ports:
+      - "8002:8002"
+
+  trading:
+    build: .
+    command: fastmcp run mcp_servers/trading_server.py --transport sse --port 8003 --host 0.0.0.0
+    environment:
+      - FASTMCP_HTTP_HOST_ORIGIN_PROTECTION=false
+    ports:
+      - "8003:8003"
+
+  web:
+    build: .
+    command: sh -c "sleep 3 && python3 -m uvicorn app:app --host 0.0.0.0 --port 8000"
+    environment:
+      - DISCOVERY_URL=http://discovery:8001/sse
+      - ONBOARDING_URL=http://onboarding:8002/sse
+      - TRADING_URL=http://trading:8003/sse
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - discovery
+      - onboarding
+      - trading

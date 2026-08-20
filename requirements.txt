@@ -1,0 +1,9 @@
+mcp[cli]>=1.2.0
+fastmcp
+fastapi
+uvicorn[standard]
+websockets
+langgraph
+langchain-openai
+pydantic
+ 
