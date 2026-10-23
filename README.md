@@ -1,5 +1,7 @@
 # Agentenbasierte Depoteröffnung — Prototyp
 
+<img width="1680" height="948" alt="Bildschirmfoto_2026-10-23_18-35-20" src="https://github.com/user-attachments/assets/70f302e1-5b32-4c36-b90a-aceae8778bc9" />
+
 Lauffähiger Prototyp zum technischen Zielkonzept aus der Case Study: ein
 Kundenagent (simuliert) eröffnet über drei echte MCP-Server (Discovery,
 Onboarding, Trading) und eine LangGraph-State-Machine ein Depot samt
